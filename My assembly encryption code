@@ -1,0 +1,250 @@
+/*
+ * Filename: mycrypt.s
+ * Author: Olujimi Olugboyega
+ * Userid: cse30xku
+ * Description:  This function does the encrypting/decrypting of data
+ * using the keys and masks we got from the user
+ * Date: 04/27/2015
+ * Sources of Help:  Lab tutors
+ */
+
+ 		.global mycrypt		! Declare the function globally so that we can
+									! call it from other modules
+
+		.section ".text"		! The text segment begins here 
+
+		BUFSIZE  = 1024
+
+		CHUNKSIZE = 8
+
+		ELEMENT_NUM  = 128
+
+		ARRAY_SIZE = 5
+
+		OFFSET = 4
+
+/*
+ * Function name: mycrypt
+ * Function prototype: void rotate( FILE *inFile, unsigned long
+ * mask[], int rotateValue)
+ * Description: This does the encrypting and decrypting of data					
+ * Parameters:
+ *			arg 1 : FILE *inFile
+ *       arg 2 : unsigned long mask[]
+ *			arg 3 : int rotateValue
+ * Side Effects: None
+ * Error Conditions: None
+ * Return Value: TODO
+ * Registers Used: TODO
+ */	
+ 		mycrypt:
+			save		%sp, -(92 + BUFSIZE) & -8, %sp! To allow for our BUSIZE
+																! local variable
+			
+			clr		%l4									! The fp offset								
+	read_loop:
+
+					
+			sub		%fp, BUFSIZE, %o0					! void ptr
+
+			mov		1,	%o1								! 1 byte elements
+
+			mov		BUFSIZE, %o2						! 1024 total elements
+
+			mov   	%i0, %o3								! FILE * infile
+			
+			call		fread				
+			nop
+
+
+			mov 		%o0, %l0								! store the num of things
+																! read
+			/* (num of things read )/8 */
+
+			mov		CHUNKSIZE, %o1						
+
+			call		.div				
+			nop
+
+
+			mov		%o0,  %l1							! no of times that we would
+																! have to load and Xor
+
+
+			clr 		%l3									! the arrayLoop counter
+			
+			cmp		%l0, 0								! TODO make sure this only
+			ble		end_read_loop						! happens once
+			nop
+
+			cmp		%l1, 0								! incase value < 8
+			ble		special_case
+			nop
+			
+			cmp		%l3 , %l1
+			bge		end_array_Loop1
+			nop 
+
+		array_Loop1: 
+
+		!	ld		[%fp - BUFSIZE] + %l4,%l6			! first 4 bytes*/
+			sub	%fp, BUFSIZE, %l6
+
+			add	%l6, %l4, %l6
+
+			ld		[%l6], %l5								! first 4 bytes
+
+			ld		[%i1], %l2 								! mask[0]
+
+			xor	%l5, %l2, %l2							! xor 4 bytes with mask[0]
+
+			st		%l2, [%l6]								! Xored value in the buffer	
+
+			add   %l4, OFFSET, %l4						! Increment %l4 by 4
+
+		!	ld		[%fp - BUFSIZE] + %l4, %l5	    	! second 4 bytes */
+			sub	%fp, BUFSIZE, %l6
+
+			add  %l6, %l4, %l6
+
+			ld	  [%l6], %l5								! second 4 bytes
+		
+
+			ld		[%i1 + OFFSET], %l2					! mask[1]
+
+			xor	%l5, %l2, %l2							! xor the 2nd 4 bytes with
+																! mask[1]
+		
+			st		%l2,	[%l6] 							! values stored in mask[1]
+
+			mov	%i1, %o0									! mask[0]
+
+			mov	%i2 , %o1								! rotCnt
+
+			call  rotate
+			nop
+
+			add	%l3, 1, %l3								! Increment array counter
+
+			cmp	%l3, %l1									! looping condition
+			bl		array_Loop1
+			nop
+
+		end_array_Loop1:
+
+		special_case:
+
+			/* (# of elements) % 8 */
+			mov	%l0, %o0
+
+			mov	CHUNKSIZE , %o1
+
+			call  .rem	
+			nop
+
+			mov	%o0, %l1									! number of remainders
+
+			cmp	%l1, 0									! check if any remainders
+			ble	end_read_loop
+			nop
+
+			clr	%l4										! Recycled loop counter %l4
+
+		end_special_case:
+
+		remainder_Loop: 
+
+			/* loop for the first 4 remainders */
+			cmp   %l4, %l1									
+			bge	end_inner_remainder_Loop1
+			nop
+		inner_remainder_Loop1:
+
+		!	ldub	[%fp - BUFSIZE] + %l4,%l6			! first byte */
+
+			sub	%fp, BUFSIZE, %l6
+
+			add	%l6, %l4, %l6	
+
+			ldub	[%l6], %l5								! first byte
+
+			ldub	[%i1 + %l4], %l2 						! mask[0]
+
+			xor	%l5, %l2, %l2
+
+			stb	%l2, [%l6]								! Store value in buffer	
+
+			add	%l4, 1, %l4								! Increment array counter
+
+			cmp	%l4, OFFSET								! looping condition
+			bge 	inner_remainder_Loop2
+			nop
+
+			cmp   %l4, %l1									
+			bl		inner_remainder_Loop1				! if bytes are less than 5
+			nop
+
+		end_inner_remainder_Loop1:
+
+			ba 	end_remainder_Loop
+			nop 
+
+			/* loop for the last 3 remainders */
+			cmp   %l4, %l1									
+			bge	end_inner_remainder_Loop1
+			nop
+
+		inner_remainder_Loop2:
+			
+		!	ldub	[(%fp - BUFSIZE) + %l4], %l6		! first byte*/
+		
+			sub	%fp, BUFSIZE, %l6
+
+			add	%l6, %l4, %l6
+
+			ldub	[%l6], %l5								! first byte
+
+			ldub	[%i1 + %l4], %l2 						! mask[0]
+			
+			xor	%l5, %l2, %l2
+
+			stb	%l2, [%l6]								! Store value in buffer	
+
+			add	%l4, 1, %l4								! Increment array counter
+
+			cmp	%l4, %l1
+			bl		inner_remainder_Loop2
+			nop
+
+		end_inner_remainder_Loop2:
+
+		end_remainder_Loop: 
+
+		write_Loop:			
+
+			sub		%fp ,BUFSIZE, %o0					! void ptr
+
+			mov		1,	%o1								! 1 byte elements
+
+			mov		%l0, %o2							! 1024 total elements
+	
+			set   	standardOut, %l1				
+
+			ld 		[%l1], %o3							! to stdout
+			
+			call		fwrite			
+			nop
+
+			mov 		%o0,  %l2
+
+		end_write_Loop:
+
+			cmp		%l0, 0								! TODO why do you have 
+			bg		read_loop								! this twice
+			nop
+
+		end_read_loop:										! Everything should have
+																! been encrypted
+			
+			ret											
+			restore 
